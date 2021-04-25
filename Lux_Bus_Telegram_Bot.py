@@ -5,16 +5,19 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageH
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from emoji import emojize
 import getRealTime
+from utils import build_menu
 
 lux_bus = pd.read_csv("lux_bus.csv", encoding='latin1')
 
-main_menu_keyboard = [[InlineKeyboardButton('Search by Bus Number', callback_data='searchBusNo')], [InlineKeyboardButton(
-    'Search by Stop', callback_data='searchStop')], [InlineKeyboardButton('Help', callback_data='help')]]
+main_menu_keyboard = [InlineKeyboardButton('Search by Bus Number', callback_data='searchBusNo'), InlineKeyboardButton(
+    'Search by Stop', callback_data='searchStop'), InlineKeyboardButton('Help', callback_data='help')]
+
+footer = InlineKeyboardButton('Main Menu', callback_data='startover')
 
 
 def start(update, context):
     start_rmarkup = InlineKeyboardMarkup(
-        main_menu_keyboard, resize_keyboard=True)
+        build_menu(main_menu_keyboard, n_cols=2))
 
     update.message.reply_text(
         text='Welcome to the Lux Bus Telegram Bot. Please select from the options below.', reply_markup=start_rmarkup)
@@ -25,7 +28,7 @@ def start_over(update, context):
     query.answer()
 
     start_rmarkup = InlineKeyboardMarkup(
-        main_menu_keyboard, resize_keyboard=True)
+        build_menu(main_menu_keyboard, n_cols=2))
 
     query.edit_message_text(
         text='Welcome back to the beginning. Please select from the options below.', reply_markup=start_rmarkup)
@@ -65,11 +68,9 @@ def selectResults(update, context):
             for pair in pairs:
                 busno_keyboard.append([InlineKeyboardButton(str(
                     pair[0]) + ' towards ' + str(pair[1]), callback_data=str(pair) + '-getStops')])
-            busno_keyboard.append([InlineKeyboardButton(
-                'Main Menu', callback_data='startover')])
+            busno_keyboard.append([footer])
 
-            busno_rmarkup = InlineKeyboardMarkup(
-                busno_keyboard, resize_keyboard=False)
+            busno_rmarkup = InlineKeyboardMarkup(busno_keyboard)
 
             update.message.reply_text(
                 text='Which one of these?', reply_markup=busno_rmarkup)
@@ -82,22 +83,18 @@ def selectResults(update, context):
         else:
             station_name_keyboard = []
             for station in results:
-                station_name_keyboard.append([InlineKeyboardButton(
-                    station, callback_data='undefined-' + station + '-getStation')])
-            station_name_keyboard.append(
-                [InlineKeyboardButton('Main Menu', callback_data='startover')])
+                station_name_keyboard.append(InlineKeyboardButton(
+                    station, callback_data='undefined-' + station + '-getStation'))
 
-            station_name_keyboard = InlineKeyboardMarkup(
-                station_name_keyboard, resize_keyboard=False)
+            station_name_rmarkup = InlineKeyboardMarkup(
+                build_menu(station_name_keyboard, n_cols=2, footer_buttons=footer))
 
             update.message.reply_text(
-                text='Which one of these?', reply_markup=station_name_keyboard)
+                text='Which one of these?', reply_markup=station_name_rmarkup)
 
 
 def getStops(update, context):
-    # Fetches the Stops where the selected Bus stops
-    # Current UI causes a good amount of scrolling
-    # If possible, making them into 2 collumns would be ideal
+    # Fetches the Stops where the selected Bus passes
 
     query = update.callback_query
     query.answer()
@@ -110,12 +107,11 @@ def getStops(update, context):
 
     stops_keyboard = []
     for stop in stops:
-        stops_keyboard.append([InlineKeyboardButton(
-            stop, callback_data=line + '-' + stop + '-getStation')])
-    stops_keyboard.append([InlineKeyboardButton(
-        'Main Menu', callback_data='startover')])
+        stops_keyboard.append(InlineKeyboardButton(
+            stop, callback_data=line + '-' + stop + '-getStation'))
 
-    stops_rmarkup = InlineKeyboardMarkup(stops_keyboard, resize_keyboard=False)
+    stops_rmarkup = InlineKeyboardMarkup(
+        build_menu(stops_keyboard, n_cols=2, footer_buttons=footer))
 
     query.edit_message_text(
         text='Which station do you want to check?', reply_markup=stops_rmarkup)
@@ -130,14 +126,11 @@ def getStation(update, context):
     station_id = str(lux_bus[lux_bus.stop == station_name]
                      ['station_id'].to_list()[0])
 
-    station_keyboard = []
-    station_keyboard.append([InlineKeyboardButton(
-        'Check Again', callback_data=line + '-' + station_name + '-getStation')])
-    station_keyboard.append([InlineKeyboardButton(
-        'Main Menu', callback_data='startover')])
+    station_keyboard = [[InlineKeyboardButton(
+        'Check Again', callback_data=line + '-' + station_name + '-getStation')], [footer]]
 
     station_rmarkup = InlineKeyboardMarkup(
-        station_keyboard, resize_keyboard=False)
+        station_keyboard)
 
     result = getRealTime.main(station_id, line)
     result = result.head(5)
@@ -159,10 +152,9 @@ def help(update, context):
     query = update.callback_query
     query.answer()
 
-    help_keyboard = [[InlineKeyboardButton('GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')], [
-        InlineKeyboardButton('Main Menu', callback_data='startover')]]
+    help_keyboard = [[InlineKeyboardButton('GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')], [footer]]
 
-    help_rmarkup = InlineKeyboardMarkup(help_keyboard, resize_keyboard=True)
+    help_rmarkup = InlineKeyboardMarkup(help_keyboard)
 
     query.edit_message_text(
         text="Simple bot to check Real Time data from public busses and trams in Luxembourg.", reply_markup=help_rmarkup)
