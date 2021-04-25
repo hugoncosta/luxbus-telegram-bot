@@ -8,9 +8,8 @@ import getRealTime
 
 lux_bus = pd.read_csv("lux_bus.csv", encoding='latin1')
 
-main_menu_keyboard = [[InlineKeyboardButton('Search by Bus Number', callback_data='searchBusNo')]
-                      , [InlineKeyboardButton('Search by Stop', callback_data='searchStop')]
-                      , [InlineKeyboardButton('Help', callback_data='help')]]
+main_menu_keyboard = [[InlineKeyboardButton('Search by Bus Number', callback_data='searchBusNo')], [InlineKeyboardButton(
+    'Search by Stop', callback_data='searchStop')], [InlineKeyboardButton('Help', callback_data='help')]]
 
 
 def start(update, context):
@@ -160,8 +159,8 @@ def help(update, context):
     query = update.callback_query
     query.answer()
 
-    help_keyboard = [[InlineKeyboardButton('GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')]
-                    , [InlineKeyboardButton('Main Menu', callback_data='startover')]]
+    help_keyboard = [[InlineKeyboardButton('GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')], [
+        InlineKeyboardButton('Main Menu', callback_data='startover')]]
 
     help_rmarkup = InlineKeyboardMarkup(help_keyboard, resize_keyboard=True)
 

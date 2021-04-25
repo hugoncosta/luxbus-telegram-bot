@@ -1,4 +1,4 @@
-stop,line,destination,url,data-station
+stop,line,destination,url,station_id
 Arret Adolphe Fischer,19,GARE CENTRALE,https://vdl.lu/fr/se-deplacer/en-bus/horaires-et-depart-en-temps-reel/arrets/arret-adolphe-fischer,1521116
 Arret Aeroport Quai 1,6,"SENNINGERBERG, Aéroport",https://vdl.lu/fr/se-deplacer/en-bus/horaires-et-depart-en-temps-reel/arrets/arret-aeroport-quai-1,1110901
 Arret Aeroport Quai 1,6,BERTRANGE Gemeng,https://vdl.lu/fr/se-deplacer/en-bus/horaires-et-depart-en-temps-reel/arrets/arret-aeroport-quai-1,1110901

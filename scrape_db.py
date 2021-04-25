@@ -33,12 +33,12 @@ def main():
             , "line": lines
             , "destination": destinations
             , "url": urls
-            , "data-station": dataStation
+            , "station_id": dataStation
             }
     
     df = pd.DataFrame(dict)
     
-    df.to_csv('lux_bus_2.csv', index=False, encoding='latin1')
+    df.to_csv('lux_bus.csv', index=False, encoding='latin1')
 
 if __name__ == '__main__':
     main()
