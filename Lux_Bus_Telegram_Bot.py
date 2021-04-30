@@ -1,16 +1,24 @@
 import os
 from dotenv import load_dotenv
-import pandas as pd
+from datetime import datetime
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from emoji import emojize
+import pymongo
+import dns
 import getRealTime
 from utils import build_menu
 
-lux_bus = pd.read_csv("lux_bus.csv", encoding='latin1')
+load_dotenv('.env')
+
+client = pymongo.MongoClient(os.getenv("mongodb_connection"))
+db = client["LuxBusBot"]
+users = db["users"]
+favs = db["favourites"]
+stations = db["stations"]
+
 
 main_menu_keyboard = [InlineKeyboardButton('Search by Bus Number', callback_data='searchBusNo'), InlineKeyboardButton(
-    'Search by Stop', callback_data='searchStop'), InlineKeyboardButton('Help', callback_data='help')]
+    'Search by Stop', callback_data='searchStop'), InlineKeyboardButton('Favourites', callback_data='checkFavs'), InlineKeyboardButton('Help', callback_data='help')]
 
 footer = InlineKeyboardButton('Main Menu', callback_data='startover')
 
@@ -56,18 +64,16 @@ def selectResults(update, context):
         # If message is under 4 characters, assumes it is a number.
         # Shortest station is Bois. Fix might be required.
 
-        results = lux_bus[lux_bus.line == msg][[
-            "line", "destination"]].drop_duplicates()
-        if results.empty:
+        unique_destinations = stations.find(
+            {"line": str(msg)}).distinct("destination")
+        if len(unique_destinations) == 0:
             update.message.reply_text(
-                text='That bus doesn\'t exist in our database. Try with a different one.')
+                text="That bus doesn't exist in our database. Try with a different one.")
         else:
-            pairs = list(results.itertuples(index=False, name=None))
-
             busno_keyboard = []
-            for pair in pairs:
+            for destination in unique_destinations:
                 busno_keyboard.append([InlineKeyboardButton(str(
-                    pair[0]) + ' towards ' + str(pair[1]), callback_data=str(pair) + '-getStops')])
+                    msg) + ' towards ' + destination, callback_data=msg + '-' + destination + '-getStops')])
             busno_keyboard.append([footer])
 
             busno_rmarkup = InlineKeyboardMarkup(busno_keyboard)
@@ -75,19 +81,20 @@ def selectResults(update, context):
             update.message.reply_text(
                 text='Which one of these?', reply_markup=busno_rmarkup)
     else:
-        results = lux_bus[lux_bus.stop.str.contains(
-            msg)]['stop'].unique().tolist()
-        if len(results) == 0:
+        unique_stations = stations.find(
+            {"stop": {"$regex": ".*" + msg + ".*", "$options": "i"}}).distinct("stop")
+        if len(unique_stations) == 0:
             update.message.reply_text(
                 text='No station by that name exists in our database. Try a different one.')
         else:
             station_name_keyboard = []
-            for station in results:
-                station_name_keyboard.append(InlineKeyboardButton(
-                    station, callback_data='undefined-' + station + '-getStation'))
+            for station in unique_stations:
+                station_id = stations.find_one({"stop": station})["station_id"]
+                station_name_keyboard.append([InlineKeyboardButton(
+                    station, callback_data='undefined-' + str(station_id) + '-getStation')])
 
-            station_name_rmarkup = InlineKeyboardMarkup(
-                build_menu(station_name_keyboard, n_cols=2, footer_buttons=footer))
+            station_name_keyboard.append([footer])
+            station_name_rmarkup = InlineKeyboardMarkup(station_name_keyboard)
 
             update.message.reply_text(
                 text='Which one of these?', reply_markup=station_name_rmarkup)
@@ -99,16 +106,17 @@ def getStops(update, context):
     query = update.callback_query
     query.answer()
 
-    line = query.data.split('\'')[1]
-    destination = query.data.split('\'')[3]
+    line = query.data.split('-')[0]
+    destination = query.data.split('-')[1]
 
-    stops = lux_bus[(lux_bus.line == line) & (
-        lux_bus.destination == destination)]["stop"].to_list()
+    unique_stops = stations.find(
+        {"line": str(line), "destination": destination}).distinct("stop")
 
     stops_keyboard = []
-    for stop in stops:
+    for stop in unique_stops:
+        station_id = stations.find_one({"stop": stop})["station_id"]
         stops_keyboard.append(InlineKeyboardButton(
-            stop, callback_data=line + '-' + stop + '-getStation'))
+            stop, callback_data=line + '-' + str(station_id) + '-getStation'))
 
     stops_rmarkup = InlineKeyboardMarkup(
         build_menu(stops_keyboard, n_cols=2, footer_buttons=footer))
@@ -121,16 +129,9 @@ def getStation(update, context):
     query = update.callback_query
     query.answer()
 
+    chat_id = query['message']['chat']['id']
     line = str(query.data.split('-')[0])
-    station_name = query.data.split('-')[1]
-    station_id = str(lux_bus[lux_bus.stop == station_name]
-                     ['station_id'].to_list()[0])
-
-    station_keyboard = [[InlineKeyboardButton(
-        'Check Again', callback_data=line + '-' + station_name + '-getStation')], [footer]]
-
-    station_rmarkup = InlineKeyboardMarkup(
-        station_keyboard)
+    station_id = query.data.split('-')[1]
 
     result = getRealTime.main(station_id, line)
     result = result.head(5)
@@ -144,24 +145,121 @@ def getStation(update, context):
         for n in range(0, result.shape[0]):
             text += "Bus " + str(result.iat[n, 0]) + " heading to " + result.iat[n, 1] + " will depart in " + str(
                 result.iat[n, 3]) + " minutes at " + result.iat[n, 2] + ". \n"
+        text += "Last updated at " + datetime.now().strftime("%H:%M:%S")
+
+    if favs.find_one({"chat_id": chat_id, "station_id": int(station_id), "line": line}):
+        station_keyboard = [[InlineKeyboardButton('Check Again', callback_data=line + '-' + str(station_id) + '-getStation')], [
+            InlineKeyboardButton('Remove from Favourites', callback_data='rem-' + line + '-' + str(station_id) + '-changeFavs')], [footer]]
+    else:
+        station_keyboard = [[InlineKeyboardButton('Check Again', callback_data=line + '-' + str(station_id) + '-getStation')], [
+            InlineKeyboardButton('Add to Favourites', callback_data='add-' + line + '-' + str(station_id) + '-changeFavs')], [footer]]
+
+    station_rmarkup = InlineKeyboardMarkup(
+        station_keyboard)
 
     query.edit_message_text(text=text, reply_markup=station_rmarkup)
+
+
+def checkFavs(update, context):
+    query = update.callback_query
+    query.answer()
+
+    chat_id = query['message']['chat']['id']
+
+    if favs.count_documents({"chat_id": chat_id}) != 0:
+        favs_keyboard = []
+        for fav in favs.find({"chat_id": chat_id}):
+            station_id = fav['station_id']
+            station_name = stations.find_one(
+                {"station_id": station_id})["stop"]
+            line = fav["line"]
+            if line == 'undefined':
+                favs_keyboard.append(InlineKeyboardButton(
+                    station_name, callback_data=line + '-' + str(station_id) + '-getStation'))
+            else:
+                favs_keyboard.append(InlineKeyboardButton(
+                    line + " out of " + station_name, callback_data=line + '-' + str(station_id) + '-getStation'))
+
+        favs_rmarkup = InlineKeyboardMarkup(build_menu(
+            favs_keyboard, n_cols=2, footer_buttons=footer), resize_keyboard=True)
+        query.edit_message_text(
+            text="Here are your favourites:", reply_markup=favs_rmarkup)
+
+    else:
+        noFavs_rmarkup = InlineKeyboardMarkup(
+            [[footer]])
+        query.edit_message_text(
+            text="You don't have any favourites yet. Add them next time you search for a stop/bus.", reply_markup=noFavs_rmarkup)
+
+
+def changeFavs(update, context):
+    query = update.callback_query
+    query.answer()
+
+    chat_id = query['message']['chat']['id']
+    action = str(query.data.split('-')[0])
+    line = str(query.data.split('-')[1])
+    station_id = str(query.data.split('-')[2])
+
+    if action == 'add':
+        favs.insert_one({"chat_id": chat_id, "line": line,
+                        "station_id": int(station_id)})
+        station_keyboard = [[InlineKeyboardButton('Check Again', callback_data=line + '-' + str(station_id) + '-getStation')], [
+            InlineKeyboardButton('Remove from Favourites', callback_data='rem-' + line + '-' + str(station_id) + '-changeFavs')], [footer]]
+
+        station_rmarkup = InlineKeyboardMarkup(station_keyboard)
+
+        result = getRealTime.main(station_id, line)
+        result = result.head(5)
+        if result.empty:
+            text = "No bus " + line + " in the near future or the line has been deprecated."
+        else:
+            text = "Next Bus:\n"
+            for n in range(0, result.shape[0]):
+                text += "Bus " + str(result.iat[n, 0]) + " heading to " + result.iat[n, 1] + " will depart in " + str(
+                    result.iat[n, 3]) + " minutes at " + result.iat[n, 2] + ". \n"
+            text += "Last updated at " + datetime.now().strftime("%H:%M:%S")
+
+        query.edit_message_text(
+            text="The station/bus has been added.\n" + text, reply_markup=station_rmarkup)
+    else:
+        favs.delete_one({"chat_id": chat_id, "line": line,
+                        "station_id": int(station_id)})
+        station_keyboard = [[InlineKeyboardButton('Check Again', callback_data=line + '-' + str(station_id) + '-getStation')], [
+            InlineKeyboardButton('Add to Favourites', callback_data='add-' + line + '-' + str(station_id) + '-changeFavs')], [footer]]
+
+        station_rmarkup = InlineKeyboardMarkup(
+            station_keyboard)
+
+        result = getRealTime.main(station_id, line)
+        result = result.head(5)
+        if result.empty:
+            text = "No bus " + line + " in the near future or the line has been deprecated."
+        else:
+            text = "Next Bus:\n"
+            for n in range(0, result.shape[0]):
+                text += "Bus " + str(result.iat[n, 0]) + " heading to " + result.iat[n, 1] + " will depart in " + str(
+                    result.iat[n, 3]) + " minutes at " + result.iat[n, 2] + ". \n"
+            text += "Last updated at " + datetime.now().strftime("%H:%M:%S")
+
+        query.edit_message_text(
+            text="The station/bus has been removed.\n" + text, reply_markup=station_rmarkup)
 
 
 def help(update, context):
     query = update.callback_query
     query.answer()
 
-    help_keyboard = [[InlineKeyboardButton('GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')], [footer]]
+    help_keyboard = [[InlineKeyboardButton(
+        'GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')], [footer]]
 
     help_rmarkup = InlineKeyboardMarkup(help_keyboard)
 
     query.edit_message_text(
-        text="Simple bot to check Real Time data from public busses and trams in Luxembourg.", reply_markup=help_rmarkup)
+        text="Simple bot to check Real Time data from public busses and trams in Luxembourg. For more info, check the GitHub repo.", reply_markup=help_rmarkup)
 
 
 def main():
-    load_dotenv('.env')
     updater = Updater(token=os.getenv('bot_api'), use_context=True)
 
     dispatcher = updater.dispatcher
@@ -174,6 +272,10 @@ def main():
         getStops, pattern='^(.|\n)*?-getStops$'))
     dispatcher.add_handler(CallbackQueryHandler(
         getStation, pattern='^(.|\n)*?-getStation$'))
+    dispatcher.add_handler(CallbackQueryHandler(
+        changeFavs, pattern='^(.|\n)*?-changeFavs$'))
+    dispatcher.add_handler(CallbackQueryHandler(
+        checkFavs, pattern='^checkFavs$'))
     dispatcher.add_handler(MessageHandler(Filters.text, selectResults))
     dispatcher.add_handler(CallbackQueryHandler(
         start_over, pattern='^startover$'))
