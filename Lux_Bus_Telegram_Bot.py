@@ -7,7 +7,7 @@ import pymongo
 import dns
 import getRealTime
 from utils import build_menu
-from utils import log
+
 
 load_dotenv('.env')
 
@@ -23,6 +23,12 @@ main_menu_keyboard = [InlineKeyboardButton('Search by Bus Number', callback_data
     'Search by Stop', callback_data='searchStop'), InlineKeyboardButton('Favourites', callback_data='checkFavs'), InlineKeyboardButton('Help', callback_data='help')]
 
 footer = InlineKeyboardButton('Main Menu', callback_data='startover')
+
+def log(chat_id, data, func, level):
+    # Logging function
+    
+    timestamp = datetime.now()
+    logs.insert_one({"timestamp": timestamp, "chat_id": chat_id, "func": func, "data": data, "level": level})
 
 
 def start(update, context):

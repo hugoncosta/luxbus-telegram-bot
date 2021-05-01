@@ -22,7 +22,7 @@ In case the stations have changed, run the scrape_db.py to update the db.
 - [x] Create a db to save the user's favourite stations or station/bus combinations
     - [ ] Alert the user when his normal bus (e.g. the 18 that leaves Station X at 8:30am) is running early/late - very hard to scale properly
 - [x] Create a proper db system that isn't based out of csv files (keep in mind that the bot runs continously, functions need to open/insert/save in the same step)
-- [ ] Introduce limitations to avoid overburdening the API, as this bot hasn't been blessed by the Grand Duke yet
+- [ ] Introduce limitations to avoid overburdening the API, as this bot hasn't been blessed by the Grand Duke yet - logging might help with this (if chat_id has over 10 requests in the past 5 seconds, throttle it)
 - [ ] Consider using the ConversationHandler instead of one MessageHandler to seperate both workflows (Search by Bus No and by Station)
 - [x] Create a proper logger to gather usage data for statistics/debug
 - [ ] Allow the user to select more than one bus when searching
