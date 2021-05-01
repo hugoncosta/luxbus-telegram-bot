@@ -7,6 +7,7 @@ import pymongo
 import dns
 import getRealTime
 from utils import build_menu
+from utils import log
 
 load_dotenv('.env')
 
@@ -15,6 +16,7 @@ db = client["LuxBusBot"]
 users = db["users"]
 favs = db["favourites"]
 stations = db["stations"]
+logs = db["logs"]
 
 
 main_menu_keyboard = [InlineKeyboardButton('Search by Bus Number', callback_data='searchBusNo'), InlineKeyboardButton(
@@ -24,6 +26,7 @@ footer = InlineKeyboardButton('Main Menu', callback_data='startover')
 
 
 def start(update, context):
+    log(update.message.chat_id, "start", "start", "debug")
     start_rmarkup = InlineKeyboardMarkup(
         build_menu(main_menu_keyboard, n_cols=2))
 
@@ -34,7 +37,8 @@ def start(update, context):
 def start_over(update, context):
     query = update.callback_query
     query.answer()
-
+    log(query.message.chat_id, query.data, "start_over", "debug")
+    
     start_rmarkup = InlineKeyboardMarkup(
         build_menu(main_menu_keyboard, n_cols=2))
 
@@ -45,6 +49,7 @@ def start_over(update, context):
 def searchBusNo(update, context):
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "searchBusNo", "debug")
 
     query.message.reply_text(
         text='What\'s the number of the bus that you want to check?')
@@ -53,12 +58,14 @@ def searchBusNo(update, context):
 def searchStop(update, context):
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "searchStop", "debug")
 
     query.message.reply_text(text='What stop do you want to check?')
 
 
 def selectResults(update, context):
     msg = update.message.text.title()
+    log(update.message.chat_id, msg, "selectResults", "debug")
 
     if len(msg) < 4:
         # If message is under 4 characters, assumes it is a number.
@@ -67,6 +74,7 @@ def selectResults(update, context):
         unique_destinations = stations.find(
             {"line": str(msg)}).distinct("destination")
         if len(unique_destinations) == 0:
+            log(update.message.chat_id, msg, "selectResults", "warning")
             update.message.reply_text(
                 text="That bus doesn't exist in our database. Try with a different one.")
         else:
@@ -84,6 +92,7 @@ def selectResults(update, context):
         unique_stations = stations.find(
             {"stop": {"$regex": ".*" + msg + ".*", "$options": "i"}}).distinct("stop")
         if len(unique_stations) == 0:
+            log(update.message.chat_id, msg, "selectResults", "warning")
             update.message.reply_text(
                 text='No station by that name exists in our database. Try a different one.')
         else:
@@ -105,6 +114,7 @@ def getStops(update, context):
 
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "getStops", "debug")
 
     line = query.data.split('-')[0]
     destination = query.data.split('-')[1]
@@ -128,8 +138,9 @@ def getStops(update, context):
 def getStation(update, context):
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "getStation", "debug")
 
-    chat_id = query['message']['chat']['id']
+    chat_id = query.message.chat_id
     line = str(query.data.split('-')[0])
     station_id = query.data.split('-')[1]
 
@@ -139,6 +150,7 @@ def getStation(update, context):
     # for stations like Hamilius or Gare to avoid having
     # to do a second search with only the bus the person wants
     if result.empty:
+        log(query.message.chat_id, query.data, "getStops", "warning")
         text = "No bus " + line + " in the near future or the line has been deprecated."
     else:
         text = "Next Bus:\n"
@@ -163,8 +175,9 @@ def getStation(update, context):
 def checkFavs(update, context):
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "checkFavs", "debug")
 
-    chat_id = query['message']['chat']['id']
+    chat_id = query.message.chat_id
 
     if favs.count_documents({"chat_id": chat_id}) != 0:
         favs_keyboard = []
@@ -195,8 +208,9 @@ def checkFavs(update, context):
 def changeFavs(update, context):
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "changeFavs", "debug")
 
-    chat_id = query['message']['chat']['id']
+    chat_id = query.message.chat_id
     action = str(query.data.split('-')[0])
     line = str(query.data.split('-')[1])
     station_id = str(query.data.split('-')[2])
@@ -212,6 +226,7 @@ def changeFavs(update, context):
         result = getRealTime.main(station_id, line)
         result = result.head(5)
         if result.empty:
+            log(query.message.chat_id, query.data, "changeFavs", "warning")
             text = "No bus " + line + " in the near future or the line has been deprecated."
         else:
             text = "Next Bus:\n"
@@ -234,6 +249,7 @@ def changeFavs(update, context):
         result = getRealTime.main(station_id, line)
         result = result.head(5)
         if result.empty:
+            log(query.message.chat_id, query.data, "changeFavs", "warning")
             text = "No bus " + line + " in the near future or the line has been deprecated."
         else:
             text = "Next Bus:\n"
@@ -249,6 +265,7 @@ def changeFavs(update, context):
 def help(update, context):
     query = update.callback_query
     query.answer()
+    log(query.message.chat_id, query.data, "help", "debug")
 
     help_keyboard = [[InlineKeyboardButton(
         'GitHub Link', url='https://github.com/hugoncosta/luxbus-telegram-bot/')], [footer]]

@@ -8,3 +8,9 @@ def build_menu(buttons,
     if footer_buttons:
         menu.append([footer_buttons])
     return menu
+
+def log(chat_id, data, func, level):
+    # Logging function
+    
+    timestamp = datetime.now()
+    logs.insert_one({"timestamp": timestamp, "chat_id": chat_id, "func": func, "data": data, "level": level})
